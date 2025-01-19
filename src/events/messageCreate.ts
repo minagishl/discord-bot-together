@@ -14,7 +14,7 @@ const allowedServers = process.env.ALLOWED_SERVERS?.split(",") ?? [];
 // Store conversation history
 const conversationHistory: Record<
   string,
-  Array<{ role: "user" | "assistant"; content: string }>
+  Array<{ role: "user" | "assistant" | "system" | "tool"; content: any }>
 > = {};
 
 export default {
@@ -63,6 +63,20 @@ export default {
           "Your message is too long. Please keep it under 250 characters.",
         );
         return;
+      }
+
+      // Array to store URLs of attached files
+      const attachmentUrls: string[] = [];
+
+      if (message.attachments.size > 0) {
+        // Loop through attachments
+        message.attachments.forEach((attachment) => {
+          // Check if it is an image file by MIME type
+          if (attachment.contentType?.startsWith("image/")) {
+            // Add the URL of the image to the array
+            attachmentUrls.push(attachment.url);
+          }
+        });
       }
 
       if (message.inGuild() && message.channel.isTextBased()) {
@@ -115,6 +129,7 @@ export default {
       if (conversationHistory[userId] === undefined) {
         conversationHistory[userId] = [];
       }
+
       conversationHistory[userId].push({
         role: "user",
         content: contentWithoutBotMention,
@@ -156,15 +171,34 @@ export default {
 
         const content = buildMessage();
 
+        const messages = [
+          {
+            role: "system" as const,
+            content,
+          },
+          ...conversationHistory[userId],
+        ];
+
+        if (attachmentUrls.length > 0) {
+          messages.push({
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: attachmentUrls[0],
+                },
+              },
+            ],
+          });
+        }
+
         const chatCompletion = await together.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content,
-            },
-            ...conversationHistory[userId],
-          ],
-          model: "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+          messages,
+          model:
+            attachmentUrls.length > 0
+              ? "meta-llama/Llama-Vision-Free"
+              : "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
         });
 
         if (chatCompletion.choices[0].message === undefined) {
