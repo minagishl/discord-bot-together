@@ -215,7 +215,8 @@ export default {
             "An error occurred while processing your request.",
           );
         } else {
-          await message.reply(data);
+          const sanitizedData = data.replace(/@(everyone|here)/g, '[at]$1');
+          await message.reply(sanitizedData);
 
           // Add the assistant's response to the history
           conversationHistory[userId].push({
